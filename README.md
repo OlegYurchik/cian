@@ -23,7 +23,7 @@ Contents
 For installation botovod library from pip you should have pip with python (prefer python3.6 or
 later)
 ```bash
-pip install botovod
+pip install aiocian
 ```
 ### Installation from GitHub
 To basic installation from GitHub repository you should have git, python3 (prefer python3.6 or
