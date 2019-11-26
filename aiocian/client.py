@@ -1,9 +1,65 @@
-from .constants import *
-from .exceptions import IncorrectPlaces
-import aiohttp
 import asyncio
+import datetime
+import json
+from time import sleep
+from typing import Optional, Sequence
+
+import aiohttp
 from bs4 import BeautifulSoup
-from typing import Sequence, Union
+import requests
+
+from .constants import (AREND_DAILY, AREND_MONTHLY, BED, BUILDING, BUSINESS, BUY, CAR_SERVICE,
+                        COMMERCIAL_LAND, CURRENCIES, DOMESTIC_SERVICES, FLAT, FREE_SPACE, GARAGE,
+                        HOMESTEAD, HOUSE, HOUSE_PART, MANUFACTURE, OFFICE, PART, PLACES,
+                        PUBLIC_CATERING, REGIONS, ROOM, ROOMS, SPB, STOCK, TOWNHOUSE, TRADE_AREA,
+                        USED)
+from .exceptions import IncorrectPlaces
+
+
+class Result:
+    def __init__(self, id: int, user_id: int, url: str, deal: str, premium: bool, description: str,
+                 added: datetime.datetime, address: str, latitude: float, longitude: float,
+                 total_area: float, price: float):
+        self.id = id
+        self.user_id = user_id
+        self.url = url
+        self.deal = deal
+        self.premium = premium
+        self.description = description
+        self.added = added
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+        self.total_area = total_area
+        self.price = price
+
+    @classmethod
+    def parse(cls, data):
+        deal = None
+        if data["dealType"] == "sale":
+            deal = BUY
+
+        return cls(
+            id=data["id"],
+            user_id=data["userId"],
+            url=data["fullUrl"],
+            deal=deal,
+            premium=data["isPremium"],
+            description=data["description"],
+            added=datetime.datetime.utcfromtimestamp(data["addedTimestamp"]),
+            address=None,
+            latitude=data["geo"]["coordinates"]["lat"],
+            longitude=data["geo"]["coordinates"]["lng"],
+            total_area=float(data["totalArea"]),
+            price=data["bargainTerms"]["price"],
+        )
+
+    def json(self) -> str:
+        return json.dumps(self.__dict__)
+
+    @classmethod
+    def from_json(cls, data: dict) -> Result:
+        return cls(**json.loads(data))
 
 
 class Search:
@@ -11,15 +67,15 @@ class Search:
     # COUNT_URL = "/cian-api/site/v1/offers/search/meta/"
     SEARCH_URL = "/search-offers/v2/search-offers-desktop/"
 
-    def __init__(self, session: aiohttp.ClientSession, region: str, action: str,
-                 places: Sequence[str], offer_owner: Union[str, None]=None, rooms: Sequence[str]=(),
-                 min_bedrooms: Union[int, None]=None, max_bedrooms: Union[int, None]=None,
-                 building_status: Union[str, None]=None, min_price: Union[float, None]=None,
-                 max_price: Union[float, None]=None, currency: Union[str, None]=None,
-                 square_meter_price: bool=False, min_square: Union[float, None]=None,
-                 max_square: Union[float, None]=None,  by_homeowner: bool=False,
-                 start_page: int=1, end_page: Union[int, None]=None, limit: Union[int, None]=None):
-        self.session = session
+    def __init__(self, client: CianClient, region: str, action: str, places: Sequence[str],
+                 offer_owner: Optional[str]=None, rooms: Sequence[str]=(),
+                 min_bedrooms: Optional[int]=None, max_bedrooms: Optional[int]=None,
+                 building_status: Optional[str]=None, min_price: Optional[float]=None,
+                 max_price: Optional[float]=None, currency: Optional[str]=None,
+                 square_meter_price: bool=False, min_square: Optional[float]=None,
+                 max_square: Optional[float]=None, by_homeowner: bool=False, start_page: int=1,
+                 end_page: Optional[int]=None, limit: Optional[int]=None, delay: Optional[float]=0):
+        self.client = client
         self.region = region
         self.action = action
         self.places = places
@@ -38,10 +94,11 @@ class Search:
         self.start_page = start_page
         self.end_page = end_page
         self.limit = limit
+        self.delay = delay
         self._count = None
         self._page = start_page - 1
         self._results_count = 0 
-        self._results = []
+        self._cache_results = []
 
     def __len__(self):
         return self._count
@@ -52,29 +109,116 @@ class Search:
     def __aiter__(self):
         return self
 
-    async def __anext__(self):
+    def __next__(self):
         if self.limit is not None and self.limit < self._results_count:
-            raise StopAsyncIteration
+            raise StopIteration
         self._results_count += 1
 
-        if self._results:
-            return self._results.pop(0)
+        if self._cache_results:
+            return self._cache_results.pop(0)
+        sleep(self.delay)
 
         self._page += 1
         if self.end_page is not None and self._page == self.end_page:
-            raise StopAsyncIteration  
+            raise StopIteration
 
         request_data = {
             "url": self.API_HOST + self.SEARCH_URL,
             "json": {"jsonQuery": self._search_data()},
         }
-        async with self.session.post(**request_data) as response:
+        response = self.client.session.post(**request_data)
+        data = response.json()
+
+        self._count = data["offerCount"]
+        self._cache_results = [Result.parse(x) for x in data["offersSerialized"]]
+
+        if not self._cache_results:
+            raise StopIteration
+        return self._cache_results.pop(0)
+
+    async def __anext__(self):
+        if self.limit is not None and self.limit < self._results_count:
+            raise StopAsyncIteration
+        self._results_count += 1
+
+        if self._cache_results:
+            return self._cache_results.pop(0)
+        await asyncio.sleep(self.delay)
+
+        self._page += 1
+        if self.end_page is not None and self._page == self.end_page:
+            raise StopAsyncIteration
+
+        request_data = {
+            "url": self.API_HOST + self.SEARCH_URL,
+            "json": {"jsonQuery": self._search_data()},
+        }
+        async with self.client.asession.post(**request_data) as response:
             data = (await response.json())["data"]
 
         self._count = data["offerCount"]
-        self._results = data["offersSerialized"]
+        self._cache_results = [Result.parse(x) for x in data["offersSerialized"]]
 
-        return self._results.pop(0)
+        if not self._cache_results:
+            raise StopAsyncIteration
+        return self._cache_results.pop(0)
+
+    def json(self) -> str:
+        return json.dumps({
+            "region": self.region,
+            "action": self.action,
+            "places": self.places,
+            "offer_owner": self.offer_owner,
+            "rooms": self.rooms,
+            "min_bedrooms": self.min_bedrooms,
+            "max_bedrooms": self.max_bedrooms,
+            "building_status": self.building_status,
+            "min_price": self.min_price,
+            "max_price": self.max_price,
+            "currency": self.currency,
+            "square_meter_price": self.square_meter_price,
+            "min_square": self.min_square,
+            "max_square": self.max_square,
+            "by_homeowner": self.by_homeowner,
+            "start_page": self.start_page,
+            "end_page": self.end_page,
+            "limit": self.limit,
+            "delay": self.delay,
+            "count": self._count,
+            "page": self._page,
+            "results_count": self._results_count,
+            "cache_results": [result.json() for result in self._cache_results],
+        })
+
+    @classmethod
+    def from_json(cls, data: str, client: CianClient) -> Search:
+        data = json.loads(data)
+        search = cls(
+            client=client,
+            region=data["region"],
+            action=data["action"],
+            places=data["places"],
+            offer_owner=data["offer_owner"],
+            rooms=data["rooms"],
+            min_bedrooms=data["min_bedrooms"],
+            max_bedrooms=data["max_bedrooms"],
+            building_status=data["building_status"],
+            min_price=data["min_price"],
+            max_price=data["max_price"],
+            currency=data["currency"],
+            square_meter_price=data["square_meter_price"],
+            min_square=data["min_square"],
+            max_square=data["max_square"],
+            by_homeowner=data["by_homeowner"],
+            start_page=data["start_page"],
+            end_page=data["end_page"],
+            limit=data["limit"],
+            delay=data["delay"],
+        )
+        search._count = data["count"]
+        search._page = data["page"]
+        search._results_count = data["results_count"],
+        search._cache_results = [Result.from_json()]
 
     def _search_data(self):
         places_set = set(self.places)
@@ -266,30 +410,31 @@ class Search:
         if places_set <= {FLAT} and self.rooms:
             data["room"] = {"type": "terms", "value": [ROOMS[room] for room in self.rooms]}
 
-        print(data)
         return data
 
 
 class CianClient:
     def __init__(self):
-        self.session = aiohttp.ClientSession()
+        self.asession = aiohttp.ClientSession()
+        self.session = requests.Session()
 
     async def __aenter__(self):
         return self
 
     async def __aexit__(self, *args):
-        await self.session.close()
+        await self.asession.close()
 
     def search(self, region: str, action: str, places: Sequence[str],
-               offer_owner: Union[str, None]=None, rooms: Sequence[str]=(),
-               min_bedrooms: Union[int, None]=None, max_bedrooms: Union[int, None]=None,
-               building_status: Union[str, None]=None, min_price: Union[float, None]=None,
-               max_price: Union[float, None]=None, currency: Union[str, None]=None,
-               square_meter_price: bool=False, min_square: Union[float, None]=None,
-               max_square: Union[float, None]=None, by_homeowner: bool=False, start_page: int=1,
-               end_page: Union[int, None]=None, limit: Union[int, None]=None):
+               offer_owner: Optional[str]=None, rooms: Sequence[str]=(),
+               min_bedrooms: Optional[int]=None, max_bedrooms: Optional[int]=None,
+               building_status: Optional[str]=None, min_price: Optional[float]=None,
+               max_price: Optional[float]=None, currency: Optional[str]=None,
+               square_meter_price: bool=False, min_square: Optional[float]=None,
+               max_square: Optional[float]=None, by_homeowner: bool=False, start_page: int=1,
+               end_page: Optional[int]=None, limit: Optional[int]=None, delay: float=0):
         return Search(
             session=self.session,
+            asession=self.asession,
             region=region,
             action=action,
             places=places,
@@ -308,4 +453,8 @@ class CianClient:
             start_page=start_page,
             end_page=end_page,
             limit=limit,
+            delay=delay,
         )
+
+    async def aclose(self):
+        await self.asession.close()

@@ -52,7 +52,7 @@ async def main():
         search = client.search(region=SPB, action=BUY, places=(FLAT,))
 
         async for result in search:
-            print(result)
+            print(result.url)
 
 
 loop = asyncio.get_event_loop()

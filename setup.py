@@ -3,17 +3,21 @@ from os.path import join, dirname
 
 
 setup(
-    name = "aiocian",
-    version = "0.0.1",
+    name="aiocian",
+    version="0.0.2",
     
-    author = "Oleg Yurchik",
-    author_email = "oleg.yurchik@protonmail.com",
-    url = "https://github.com/OlegYurchik/aiocian",
+    author="Oleg Yurchik",
+    author_email="oleg.yurchik@protonmail.com",
+    url="https://github.com/OlegYurchik/aiocian",
     
-    description = "",
-    long_description = open(join(dirname(__file__), "README.md")).read(),
-    long_description_content_type = "text/markdown",
+    description="",
+    long_description=open(join(dirname(__file__), "README.md")).read(),
+    long_description_content_type="text/markdown",
     
-    packages = find_packages(),
-    install_requires = ["aiohttp", "requests"],
+    packages=find_packages(exclude=["tests"]),
+
+    python_requires=">=3.6",
+    install_requires=["aiohttp", "requests"],
+    tests_require=["pytest"],
+    test_suite="tests",
 )
