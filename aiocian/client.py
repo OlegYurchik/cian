@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import datetime
 import json
@@ -34,7 +35,7 @@ class Result:
         self.price = price
 
     @classmethod
-    def parse(cls, data):
+    def parse(cls, data: dict) -> Result:
         deal = None
         if data["dealType"] == "sale":
             deal = BUY
@@ -64,7 +65,6 @@ class Result:
 
 class Search:
     API_HOST = "https://api.cian.ru"
-    # COUNT_URL = "/cian-api/site/v1/offers/search/meta/"
     SEARCH_URL = "/search-offers/v2/search-offers-desktop/"
 
     def __init__(self, client: CianClient, region: str, action: str, places: Sequence[str],
@@ -95,21 +95,21 @@ class Search:
         self.end_page = end_page
         self.limit = limit
         self.delay = delay
-        self._count = None
+        self._count = 0
         self._page = start_page - 1
         self._results_count = 0 
         self._cache_results = []
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self._count
 
-    def __iter__(self):
+    def __iter__(self) -> Search:
         return self
 
-    def __aiter__(self):
+    def __aiter__(self) -> Search:
         return self
 
-    def __next__(self):
+    def __next__(self) -> Result:
         if self.limit is not None and self.limit < self._results_count:
             raise StopIteration
         self._results_count += 1
@@ -136,7 +136,7 @@ class Search:
             raise StopIteration
         return self._cache_results.pop(0)
 
-    async def __anext__(self):
+    async def __anext__(self) -> Result:
         if self.limit is not None and self.limit < self._results_count:
             raise StopAsyncIteration
         self._results_count += 1
@@ -220,7 +220,7 @@ class Search:
         search._results_count = data["results_count"],
         search._cache_results = [Result.from_json()]
 
-    def _search_data(self):
+    def _search_data(self) -> dict:
         places_set = set(self.places)
         
         data = {
@@ -418,7 +418,7 @@ class CianClient:
         self.asession = aiohttp.ClientSession()
         self.session = requests.Session()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> CianClient:
         return self
 
     async def __aexit__(self, *args):
@@ -431,7 +431,7 @@ class CianClient:
                max_price: Optional[float]=None, currency: Optional[str]=None,
                square_meter_price: bool=False, min_square: Optional[float]=None,
                max_square: Optional[float]=None, by_homeowner: bool=False, start_page: int=1,
-               end_page: Optional[int]=None, limit: Optional[int]=None, delay: float=0):
+               end_page: Optional[int]=None, limit: Optional[int]=None, delay: float=0) -> Search:
         return Search(
             session=self.session,
             asession=self.asession,
