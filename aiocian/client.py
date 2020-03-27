@@ -6,7 +6,6 @@ from time import sleep
 from typing import Optional, Sequence
 
 import aiohttp
-from bs4 import BeautifulSoup
 import requests
 
 from .constants import (AREND_DAILY, AREND_MONTHLY, BED, BUILDING, BUSINESS, BUY, CAR_SERVICE,
@@ -68,7 +67,7 @@ class Search:
     SEARCH_URL = "/search-offers/v2/search-offers-desktop/"
 
     def __init__(self, client: CianClient, region: str, action: str, places: Sequence[str],
-                 offer_owner: Optional[str]=None, rooms: Sequence[str]=(),
+                 rooms: Sequence[str]=(), offer_owner: Optional[str]=None,
                  min_bedrooms: Optional[int]=None, max_bedrooms: Optional[int]=None,
                  building_status: Optional[str]=None, min_price: Optional[float]=None,
                  max_price: Optional[float]=None, currency: Optional[str]=None,
@@ -230,10 +229,18 @@ class Search:
 
         if self.action == BUY and places_set <= {FLAT}:
             data["_type"] = "flatsale"
+            if self.rooms:
+                data["room"] = {"type": "terms", "value": [ROOMS[room] for room in self.rooms]}
             if self.building_status is not None:
                 data["building_status"] = {"type": "terms", "value": USED[self.building_status]}
             if self.square_meter_price:
                 data["price_sm"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
             # IT IS NOT ALL
@@ -246,6 +253,12 @@ class Search:
                 data["price_sm"] = {"type": "term", "value": True}
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == BUY and places_set <= {HOUSE, HOUSE_PART, HOMESTEAD, TOWNHOUSE}:
             data["_type"] = "suburbansale"
@@ -262,6 +275,12 @@ class Search:
                 data["total_area"]["value"]["lte"] = self.max_square
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == BUY and places_set <= {OFFICE, TRADE_AREA, STOCK, PUBLIC_CATERING,
                                                    FREE_SPACE, GARAGE, MANUFACTURE, CAR_SERVICE,
@@ -282,6 +301,12 @@ class Search:
                 data["total_area"]["value"]["lte"] = self.max_square
             if self.by_homeowner:
                 data["from_offrep"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == BUY and places_set <= {COMMERCIAL_LAND}:
             data["_type"] = "commercialsale"
@@ -294,14 +319,30 @@ class Search:
                 data["site"]["value"]["gte"] = self.min_square
             if self.max_square is not None:
                 data["site"]["value"]["lte"] = self.max_square
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_MONTHLY and places_set <= {FLAT}:
             data["_type"] = "flatrent"
+            data["for_day"] = {"type": "term", "value": "!1"}
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.rooms:
+                data["room"] = {"type": "terms", "value": [ROOMS[room] for room in self.rooms]}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_MONTHLY and places_set <= {ROOM, BED}:
             data["_type"] = "flatrent"
+            data["for_day"] = {"type": "term", "value": "!1"}
             data["room"] = {"type": "terms", "value": []}
             while places_set:
                 data["room"]["value"].append(PLACES[places_set.pop()])
@@ -316,6 +357,7 @@ class Search:
             # IT IS NOT ALL
         elif self.action == AREND_MONTHLY and places_set <= {HOUSE, HOUSE_PART, TOWNHOUSE}:
             data["_type"] = "suburbanrent"
+            data["for_day"] = {"type": "term", "value": "!1"}
             data["object_type"] = {"type": "terms", "value": []}
             while places_set:
                 data["object_type"]["value"].append(PLACES[places_set.pop()])
@@ -327,12 +369,19 @@ class Search:
                 data["total_area"]["value"]["lte"] = self.max_square
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_MONTHLY and places_set <= {OFFICE, TRADE_AREA, STOCK,
                                                              PUBLIC_CATERING, FREE_SPACE, GARAGE,
                                                              MANUFACTURE, CAR_SERVICE, BUSINESS,
                                                              BUILDING, DOMESTIC_SERVICES}:
             data["_type"] = "commercialrent"
+            data["for_day"] = {"type": "term", "value": "!1"}
             data["office_type"] = {"type": "terms", "value": []}
             while places_set:
                 data["office_type"]["value"].append(PLACES[places_set.pop()])
@@ -348,8 +397,15 @@ class Search:
                 data["total_area"]["value"]["lte"] = self.max_square
             if self.by_homeowner:
                 data["from_offrep"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
         elif self.action == AREND_MONTHLY and places_set <= {COMMERCIAL_LAND}:
             data["_type"] = "commercialrent"
+            data["for_day"] = {"type": "term", "value": "!1"}
             data["category"] = {"type": "terms", "value": ["commercialLandSale"]}
             if self.currency is not None:
                 data["currency"] = {"type": "term", "value": CURRENCIES[self.currency]}
@@ -359,23 +415,44 @@ class Search:
                 data["site"]["value"]["gte"] = self.min_square
             if self.max_square is not None:
                 data["site"]["value"]["lte"] = self.max_square
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_DAILY and places_set <= {FLAT}:
             data["_type"] = "flatrent"
+            data["for_day"] = {"type": "term", "value": "1"}
             if self.rooms:
                 data["room"] = {"type": "terms", "value": [ROOMS[room] for room in self.rooms]}
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_DAILY and places_set <= {ROOM, BED}:
             data["_type"] = "flatrent"
+            data["for_day"] = {"type": "term", "value": "1"}
             while places_set:
                 data["room"]["value"].append(PLACES[places_set.pop()])
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         elif self.action == AREND_DAILY and places_set <= {HOUSE}:
             data["_type"] = "suburbanrent"
+            data["for_day"] = {"type": "term", "value": "1"}
             data["object_type"] = {"type": "terms", "value": PLACES[HOUSE]}
             if self.min_bedrooms is not None and self.max_bedrooms is not None:
                 data["bedroom_total"] = {"type": "range", "value": {}}
@@ -391,24 +468,18 @@ class Search:
                 data["total_area"]["value"]["lte"] = self.max_square
             if self.by_homeowner:
                 data["is_by_homeowner"] = {"type": "term", "value": True}
+            if self.min_price is not None or self.max_price is not None:
+                data["price"] = {"type": "range", "value": {}}
+            if self.min_price is not None:
+                data["price"]["value"]["gte"] = self.min_price
+            if self.max_price is not None:
+                data["price"]["value"]["lte"] = self.max_price
             # IT IS NOT ALL
         else:
             raise IncorrectPlaces(action=self.action, places=self.places)
 
         if self._page > 1:
             data["page"] = {"type": "term", "value": self._page}
-        if self.action == AREND_MONTHLY:
-            data["for_day"] = {"type": "term", "value": "!1"}
-        elif self.action == AREND_DAILY:
-            data["for_day"] = {"type": "term", "value": "1"}
-        if self.min_price is not None or self.max_price is not None:
-            data["price"] = {"type": "range", "value": {}}
-        if self.min_price is not None:
-            data["price"]["value"]["gte"] = self.min_price
-        if self.max_price is not None:
-            data["price"]["value"]["lte"] = self.max_price
-        if places_set <= {FLAT} and self.rooms:
-            data["room"] = {"type": "terms", "value": [ROOMS[room] for room in self.rooms]}
 
         return data
 
@@ -418,10 +489,22 @@ class CianClient:
         self.asession = aiohttp.ClientSession()
         self.session = requests.Session()
 
+    def __enter__(self) -> CianClient:
+        return self
+
+    def __exit__(self):
+        self.session.close()
+
+    def close(self):
+        await self.session.close()
+
     async def __aenter__(self) -> CianClient:
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self):
+        await self.aclose()
+
+    async def aclose(self):
         await self.asession.close()
 
     def search(self, region: str, action: str, places: Sequence[str],
@@ -433,8 +516,7 @@ class CianClient:
                max_square: Optional[float]=None, by_homeowner: bool=False, start_page: int=1,
                end_page: Optional[int]=None, limit: Optional[int]=None, delay: float=0) -> Search:
         return Search(
-            session=self.session,
-            asession=self.asession,
+            client=self,
             region=region,
             action=action,
             places=places,
@@ -455,6 +537,3 @@ class CianClient:
             limit=limit,
             delay=delay,
         )
-
-    async def aclose(self):
-        await self.asession.close()
