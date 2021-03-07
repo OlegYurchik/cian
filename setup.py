@@ -21,4 +21,7 @@ setup(
         "aiohttp",
         "yarl",
     ],
+    tests_require=[
+        "pytest",
+    ],
 )
