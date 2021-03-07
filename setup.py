@@ -3,21 +3,22 @@ from os.path import join, dirname
 
 
 setup(
-    name="aiocian",
-    version="0.0.3",
+    name="cian",
+    version="0.1.0",
     
     author="Oleg Yurchik",
     author_email="oleg.yurchik@protonmail.com",
-    url="https://github.com/OlegYurchik/aiocian",
+    url="https://github.com/OlegYurchik/cian",
     
-    description="",
+    description="Sync/async library for searching offers on Cian",
     long_description=open(join(dirname(__file__), "README.md")).read(),
     long_description_content_type="text/markdown",
     
-    packages=find_packages(exclude=["tests"]),
+    packages=find_packages(),
+    test_suite="cian.tests",
 
-    python_requires=">=3.6",
-    install_requires=["aiohttp", "requests"],
-    tests_require=["pytest"],
-    test_suite="tests",
+    install_requires=[
+        "aiohttp",
+        "yarl",
+    ],
 )

@@ -1,5 +1,10 @@
-__pycache__
-.vscode
-aiocian.egg-info
-build
-dist
+# Project files
+.vscode/
+
+# Python optimizing files
+__pycache__/
+
+# Python packages files
+*.egg-info/
+build/
+dist/
