@@ -51,7 +51,7 @@ class Search:
             self.page += 1
             request_data = self._get_request_data(self)
             response_data = await self.client.a_request(request_data)
-            self._results_count = response_data["aggregatedCount"] 
+            self._results_count = response_data["offerCount"] 
             self._cache_results = list(map(self._get_result, response_data["offersSerialized"]))
 
         return self._cache_results.pop(0)
