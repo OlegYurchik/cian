@@ -9,6 +9,7 @@ Contents
 * [Release Notes](#release-notes)
   * [0.0.1](#version-0-0-1)
   * [0.1.0](#version-0-1-0)
+  * [0.1.1](#version-0-1-1)
 * [Getting Started](#getting-started)
   * [Installation from pip](#installation-from-pip)
   * [Installation from GitHub](#installation-from-github)
@@ -24,6 +25,8 @@ Contents
 * Delete heavy logic creation request data
 * Delete creation `Result` object - now return `dict` object
 * Add empty tests
+### Version 0.1.1
+* Fix getting search results number
 ## Getting Started
 ### Installation from pip
 ```bash
